@@ -1,0 +1,9 @@
+# Nim compiler and documentation output
+/build/
+nimcache/
+htmldocs/
+
+# Nimble development metadata
+nimble.develop
+nimble.paths
+nimbledeps
