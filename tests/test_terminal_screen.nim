@@ -260,9 +260,14 @@ when defined(posix):
   when defined(linux):
     {.passL: "-lutil".}
 
-  proc openpty(master, slave: ptr cint; name: cstring;
-               settings: ptr Termios; size: pointer): cint {.
-    importc, header: "<pty.h>".}
+  when defined(macosx):
+    proc openpty(master, slave: ptr cint; name: cstring;
+                 settings: ptr Termios; size: pointer): cint {.
+      importc, header: "<util.h>".}
+  else:
+    proc openpty(master, slave: ptr cint; name: cstring;
+                 settings: ptr Termios; size: pointer): cint {.
+      importc, header: "<pty.h>".}
 
   var TIOCSWINSZ {.importc, header: "<sys/ioctl.h>".}: culong
 
