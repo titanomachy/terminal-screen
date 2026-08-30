@@ -10,5 +10,5 @@ options.monitorResize = false
 
 withTerminalSession session, options:
   moveCursorTo(column = 5, row = 3, output = stdout)
-  stdout.write("TerminalScreen cursor example")
+  stdout.write("TerminalScreen cursor example\r\n")
   stdout.flushFile()

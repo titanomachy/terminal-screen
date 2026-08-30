@@ -93,9 +93,14 @@ if stdout.isTerminal:
 
   withTerminalSession session, options:
     moveCursorTo(column = 10, row = 4, output = stdout)
-    stdout.write("Hello")
+    stdout.write("Hello\r\n")
     stdout.flushFile()
 ```
+
+The final `\r\n` returns the cursor to the first column on a new line before the
+program exits. Unlike `echo`, `stdout.write` does not append a newline. Without
+one, shells such as zsh may display a `%` after the text to mark an incomplete
+output line; that marker is produced by the shell, not by TerminalScreen.
 
 Pure command builders such as `cursorPositionCode`, `cursorUpCode`, and
 `cursorColumnCode` are available for batching and deterministic tests. Opening
