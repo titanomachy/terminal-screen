@@ -219,6 +219,47 @@ suite "terminal detection and non-terminal sessions":
     check event.kind == eventKey
     check event.keyEvent.text == "x"
 
+  test "a zero timeout assembles immediately available multibyte events":
+    let inputTemp = createTempFile("terminal_screen_input_", ".txt")
+    let outputTemp = createTempFile("terminal_screen_output_", ".txt")
+    defer:
+      inputTemp.cfile.close()
+      outputTemp.cfile.close()
+      removeFile(inputTemp.path)
+      removeFile(outputTemp.path)
+    inputTemp.cfile.write("é\e[A")
+    inputTemp.cfile.flushFile()
+    inputTemp.cfile.setFilePos(0)
+    let session = openSession(
+      inputTemp.cfile, outputTemp.cfile, nonTerminalOptions())
+    defer: session.close()
+    check session.readEvent(timeoutMs = 0).keyEvent.text == "é"
+    check session.readEvent(timeoutMs = 0).keyEvent.key == keyArrowUp
+
+  test "reopened sessions preserve unread redirected input":
+    let inputTemp = createTempFile("terminal_screen_input_", ".txt")
+    let outputTemp = createTempFile("terminal_screen_output_", ".txt")
+    defer:
+      inputTemp.cfile.close()
+      outputTemp.cfile.close()
+      removeFile(inputTemp.path)
+      removeFile(outputTemp.path)
+    inputTemp.cfile.write("é\e[A")
+    inputTemp.cfile.flushFile()
+    inputTemp.cfile.setFilePos(0)
+
+    block:
+      let first = openSession(
+        inputTemp.cfile, outputTemp.cfile, nonTerminalOptions())
+      defer: first.close()
+      check first.readEvent(timeoutMs = 50).keyEvent.text == "é"
+
+    block:
+      let second = openSession(
+        inputTemp.cfile, outputTemp.cfile, nonTerminalOptions())
+      defer: second.close()
+      check second.readEvent(timeoutMs = 50).keyEvent.key == keyArrowUp
+
   test "nested sessions are rejected and ownership is released":
     let inputTemp = createTempFile("terminal_screen_input_", ".txt")
     let outputTemp = createTempFile("terminal_screen_output_", ".txt")
@@ -348,6 +389,28 @@ when defined(posix):
       check session.readEvent(timeoutMs = 200).keyEvent.text == "é"
       check session.readEvent(timeoutMs = 200).keyEvent.key == keyArrowUp
       check session.readEvent(timeoutMs = 200).keyEvent.key == keyCtrlC
+
+    test "reopened sessions preserve unread pasted input":
+      var pty = openPty()
+      defer: pty.close()
+      let pasted = "a\rb"
+
+      block:
+        let first = openSession(pty.slave, pty.slave, ptyOptions())
+        defer: first.close()
+        check posix.write(
+          pty.master, unsafeAddr pasted[0], pasted.len) == pasted.len
+        check first.readEvent(timeoutMs = 200).keyEvent.text == "a"
+
+      block:
+        let second = openSession(pty.slave, pty.slave, ptyOptions())
+        defer: second.close()
+        check second.readEvent(timeoutMs = 200).keyEvent.key == keyEnter
+
+      block:
+        let third = openSession(pty.slave, pty.slave, ptyOptions())
+        defer: third.close()
+        check third.readEvent(timeoutMs = 200).keyEvent.text == "b"
 
     test "reports a changed PTY viewport":
       var pty = openPty()

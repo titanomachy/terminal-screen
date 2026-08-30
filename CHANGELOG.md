@@ -4,6 +4,12 @@ This project follows Semantic Versioning.
 
 ## [Unreleased]
 
+### Fixed
+
+- Prevent `readEvent` from reading bytes beyond its returned event and losing
+  them when a session closes, including redirected input and multi-event paste
+  across sessions that borrow the same `File`.
+
 ### Added
 
 - Add guarded, process-wide terminal sessions with transactional setup,

@@ -239,7 +239,9 @@ proc readPlatform*(state: var PlatformState; timeoutMs: int): PlatformRead =
         continue
       return timedOut()
 
-  var buffer = newString(64)
+  # A decoder belongs to one session, so reading ahead here would make closing
+  # that session discard bytes which belong to a later consumer of the File.
+  var buffer = newString(1)
   var count: int32
   if readFile(state.inputHandle, addr buffer[0], int32(buffer.len),
       addr count, nil) == 0:

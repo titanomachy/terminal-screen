@@ -134,6 +134,8 @@ modifiers, SS3 navigation, unknown sequences, and EOF.
 - One session may own process-wide terminal state at a time; nested opens raise
   `SessionActiveError`.
 - The session borrows its `File` streams. Keep them open until cleanup finishes.
+- `readEvent` consumes only the bytes needed for its one normalized event;
+  closing and reopening a session over the same input preserves later bytes.
 - Resize events are detected through bounded geometry polling in 0.1.0, avoiding
   unsafe allocation or cleanup inside a signal handler.
 

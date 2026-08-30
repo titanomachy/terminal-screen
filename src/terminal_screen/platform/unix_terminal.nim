@@ -60,7 +60,7 @@ proc restorePlatform*(state: var PlatformState) =
         errorText("cannot restore terminal mode"))
 
 proc readPlatform*(state: var PlatformState; timeoutMs: int): PlatformRead =
-  ## Waits for and reads a bounded chunk of terminal bytes.
+  ## Waits for and reads one terminal byte.
   var descriptor = TPollfd(
     fd: state.inputFd,
     events: POLLIN,
@@ -74,7 +74,9 @@ proc readPlatform*(state: var PlatformState; timeoutMs: int): PlatformRead =
       return timedOut()
     raise newException(TerminalIOError, errorText("cannot poll terminal input"))
 
-  var buffer = newString(64)
+  # A decoder belongs to one session, so reading ahead here would make closing
+  # that session discard bytes which belong to a later consumer of the File.
+  var buffer = newString(1)
   let count = posix.read(state.inputFd, addr buffer[0], buffer.len)
   if count == 0:
     return inputEnded()

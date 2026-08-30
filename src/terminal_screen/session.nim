@@ -149,6 +149,10 @@ proc elapsedMilliseconds(started: MonoTime): int =
 proc readEvent*(session: TerminalSession; timeoutMs = -1): InputEvent =
   ## Reads one normalized terminal event.
   ##
+  ## Byte-stream backends do not read ahead past the returned event. Closing a
+  ## session therefore leaves later input on its borrowed `File` available to a
+  ## subsequent session or another consumer.
+  ##
   ## `timeoutMs = -1` waits indefinitely. A non-negative timeout returns
   ## `eventTimeout` when no input or resize is available. A lone Escape is
   ## resolved after `SessionOptions.escapeTimeoutMs`.
@@ -171,11 +175,8 @@ proc readEvent*(session: TerminalSession; timeoutMs = -1): InputEvent =
       return resized.get()
 
     let elapsed = elapsedMilliseconds(started)
-    if timeoutMs >= 0 and elapsed >= timeoutMs and polled:
-      if session.decoder.hasPendingEscape:
-        let escaped = session.decoder.nextEvent(flushEscape = true)
-        if escaped.isSome:
-          return escaped.get()
+    if timeoutMs >= 0 and elapsed >= timeoutMs and polled and
+        not session.decoder.hasPendingInput:
       return timeoutInput()
 
     var waitMs: int
@@ -207,6 +208,8 @@ proc readEvent*(session: TerminalSession; timeoutMs = -1): InputEvent =
         let escaped = session.decoder.nextEvent(flushEscape = true)
         if escaped.isSome:
           return escaped.get()
+      if timeoutMs >= 0 and elapsedMilliseconds(started) >= timeoutMs:
+        return timeoutInput()
 
 template withTerminalSession*(sessionName: untyped; options: SessionOptions;
                               body: untyped): untyped =
