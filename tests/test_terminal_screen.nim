@@ -312,6 +312,18 @@ when defined(posix):
 
   var TIOCSWINSZ {.importc, header: "<sys/ioctl.h>".}: culong
 
+  when defined(macosx):
+    var PENDIN {.importc, header: "<termios.h>".}: Cflag
+
+  proc comparableLocalFlags(mode: Termios): Cflag =
+    when defined(macosx):
+      # XNU sets PENDIN when TCSANOW re-enables ICANON so queued raw input can
+      # be reprocessed without being discarded. It is kernel-maintained state,
+      # not a terminal setting changed by the session.
+      mode.c_lflag and not PENDIN
+    else:
+      mode.c_lflag
+
   type Pty = object
     master: cint
     slave: File
@@ -376,7 +388,7 @@ when defined(posix):
       check restored.c_iflag == original.c_iflag
       check restored.c_oflag == original.c_oflag
       check restored.c_cflag == original.c_cflag
-      check restored.c_lflag == original.c_lflag
+      check restored.comparableLocalFlags == original.comparableLocalFlags
       check restored.c_cc == original.c_cc
 
     test "reads real PTY bytes as normalized events":
@@ -440,4 +452,4 @@ when defined(posix):
       check restored.c_iflag == original.c_iflag
       check restored.c_oflag == original.c_oflag
       check restored.c_cflag == original.c_cflag
-      check restored.c_lflag == original.c_lflag
+      check restored.comparableLocalFlags == original.comparableLocalFlags
