@@ -135,7 +135,8 @@ modifiers, SS3 navigation, unknown sequences, and EOF.
 
 - A session captures terminal modes before changing them and restores the exact
   snapshot in reverse order.
-- Setup is transactional and `close` is idempotent.
+- Setup is transactional: a later cursor/output failure rolls back an already
+  enabled raw input mode. `close` is idempotent.
 - One session may own process-wide terminal state at a time; nested opens raise
   `SessionActiveError`.
 - The session borrows its `File` streams. Keep them open until cleanup finishes.
@@ -164,4 +165,6 @@ nimble releaseCheck
 ```
 
 Runnable examples are in `examples/`. Generated API documentation is written to
-`build/docs/terminal_screen.html`.
+`build/docs/terminal_screen.html`. On POSIX systems, `nimble test` also runs
+process-isolated PTY lifecycle scenarios for terminal EOF and partial setup
+failure; these never modify the developer terminal.

@@ -1,5 +1,8 @@
 import std/[options, os, tempfiles, unittest]
 
+when defined(posix):
+  import std/osproc
+
 import terminal_screen
 
 proc decoded(data: string; finishInput = true): seq[InputEvent] =
@@ -354,6 +357,11 @@ when defined(posix):
     result.hideCursor = false
     result.ansiMode = ansiAlways
 
+  proc runPtyProcessScenario(
+      name: string): tuple[output: string, exitCode: int] =
+    let helper = getAppDir() / "pty_process_helper"
+    execCmdEx(quoteShellCommand(@[helper, name]))
+
   suite "POSIX PTY integration":
     test "a session owns matching cursor visibility commands":
       var pty = openPty()
@@ -453,3 +461,13 @@ when defined(posix):
       check restored.c_oflag == original.c_oflag
       check restored.c_cflag == original.c_cflag
       check restored.comparableLocalFlags == original.comparableLocalFlags
+
+    test "a process-isolated PTY hangup reports EOF":
+      let process = runPtyProcessScenario("eof")
+      check process.exitCode == 0
+      check process.output.len == 0
+
+    test "a process-isolated partial setup failure restores termios":
+      let process = runPtyProcessScenario("partial-setup")
+      check process.exitCode == 0
+      check process.output.len == 0

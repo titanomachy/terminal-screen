@@ -18,6 +18,7 @@ task compilePackage, "Compile terminal_screen into the build directory":
   exec "nim c --path:src src/terminal_screen.nim"
 
 task test, "Run the terminal_screen test suite":
+  exec "nim c --path:src tests/pty_process_helper.nim"
   exec "nim c -r --path:src tests/test_terminal_screen.nim"
 
 task examples, "Check that all terminal_screen examples compile":

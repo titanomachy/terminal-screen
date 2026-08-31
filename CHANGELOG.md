@@ -26,6 +26,8 @@ This project follows Semantic Versioning.
   the same public API.
 - Add deterministic unit tests, Linux PTY lifecycle tests, cross-platform CI,
   runnable examples, and generated API documentation.
+- Add process-isolated POSIX PTY coverage for EOF and rollback when setup fails
+  after raw mode has already changed the terminal.
 - Keep compiler caches, binaries, test executables, and generated documentation
   under `build/`.
 - Document the `0.1.0` API, cleanup guarantees, limitations, and the contract
