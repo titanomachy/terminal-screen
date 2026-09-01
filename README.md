@@ -165,6 +165,7 @@ nimble releaseCheck
 ```
 
 Runnable examples are in `examples/`. Generated API documentation is written to
-`build/docs/terminal_screen.html`. On POSIX systems, `nimble test` also runs
-process-isolated PTY lifecycle scenarios for terminal EOF and partial setup
-failure; these never modify the developer terminal.
+`build/docs/terminal_screen.html`. `nimble test` also runs process-isolated
+lifecycle scenarios: POSIX uses a PTY, while Windows allocates a private Console
+for mode and cursor restoration checks. These never modify the developer
+terminal.

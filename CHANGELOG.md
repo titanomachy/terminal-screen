@@ -28,6 +28,8 @@ This project follows Semantic Versioning.
   runnable examples, and generated API documentation.
 - Add process-isolated POSIX PTY coverage for EOF and rollback when setup fails
   after raw mode has already changed the terminal.
+- Add process-isolated Windows Console integration coverage for exact mode and
+  cursor restoration after normal close, exceptions, and partial setup failure.
 - Keep compiler caches, binaries, test executables, and generated documentation
   under `build/`.
 - Document the `0.1.0` API, cleanup guarantees, limitations, and the contract

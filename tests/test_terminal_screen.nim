@@ -1,6 +1,6 @@
 import std/[options, os, tempfiles, unittest]
 
-when defined(posix):
+when defined(posix) or defined(windows):
   import std/osproc
 
 import terminal_screen
@@ -471,3 +471,31 @@ when defined(posix):
       let process = runPtyProcessScenario("partial-setup")
       check process.exitCode == 0
       check process.output.len == 0
+
+when defined(windows):
+  import std/[monotimes, times]
+
+  proc runWindowsConsoleScenario(name: string): int =
+    let helper = getAppDir() / "windows_console_helper.exe"
+    let process = startProcess(
+      helper, args = @[name], options = {poParentStreams})
+    defer: process.close()
+
+    let deadline = getMonoTime() + initDuration(seconds = 10)
+    while process.running() and getMonoTime() < deadline:
+      sleep(10)
+    if process.running():
+      process.kill()
+      discard process.waitForExit()
+      return -1
+    process.waitForExit()
+
+  suite "Windows Console integration":
+    test "normal cleanup restores console modes and cursor visibility":
+      check runWindowsConsoleScenario("normal-cleanup") == 0
+
+    test "exception cleanup restores console modes and cursor visibility":
+      check runWindowsConsoleScenario("exception-cleanup") == 0
+
+    test "partial setup failure restores console modes and ownership":
+      check runWindowsConsoleScenario("partial-setup") == 0
