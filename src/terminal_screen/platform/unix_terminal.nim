@@ -36,13 +36,18 @@ proc startPlatform*(input, output: File; enableRaw, enableAnsi: bool): PlatformS
     raise newException(TerminalStateError, errorText("cannot read terminal mode"))
 
   var rawMode = result.originalMode
-  rawMode.c_iflag = rawMode.c_iflag and not Cflag(
-    BRKINT or ICRNL or INPCK or ISTRIP or IXON
+  var disabledInputFlags = Cflag(
+    IGNBRK or BRKINT or PARMRK or INPCK or ISTRIP or INLCR or IGNCR or
+    ICRNL or IXON
   )
-  rawMode.c_oflag = rawMode.c_oflag and not Cflag(OPOST)
+  when declared(IMAXBEL):
+    disabledInputFlags = disabledInputFlags or Cflag(IMAXBEL)
+  rawMode.c_iflag = rawMode.c_iflag and not disabledInputFlags
+  # This session owns raw input only. Preserve output post-processing so a
+  # caller's line feeds retain the terminal's existing newline behavior.
   rawMode.c_cflag = (rawMode.c_cflag and not Cflag(CSIZE or PARENB)) or CS8
   rawMode.c_lflag = rawMode.c_lflag and not Cflag(
-    ECHO or ICANON or IEXTEN or ISIG
+    ECHO or ECHONL or ICANON or IEXTEN or ISIG
   )
   rawMode.c_cc[VMIN] = char(1)
   rawMode.c_cc[VTIME] = char(0)

@@ -399,6 +399,57 @@ when defined(posix):
       check restored.comparableLocalFlags == original.comparableLocalFlags
       check restored.c_cc == original.c_cc
 
+    test "raw input clears inherited translations and preserves output mode":
+      var pty = openPty()
+      defer: pty.close()
+      let slaveFd = cint(pty.slave.getFileHandle())
+
+      var configured: Termios
+      check tcGetAttr(slaveFd, addr configured) == 0
+      configured.c_iflag = configured.c_iflag or Cflag(
+        IGNBRK or PARMRK or INLCR or IGNCR)
+      when declared(IMAXBEL):
+        configured.c_iflag = configured.c_iflag or Cflag(IMAXBEL)
+      configured.c_oflag = configured.c_oflag or Cflag(OPOST or ONLCR)
+      configured.c_lflag = configured.c_lflag or Cflag(ECHONL)
+      check tcSetAttr(slaveFd, TCSANOW, addr configured) == 0
+      check tcGetAttr(slaveFd, addr configured) == 0
+
+      let session = openSession(pty.slave, pty.slave, ptyOptions())
+      defer: session.close()
+
+      var raw: Termios
+      check tcGetAttr(slaveFd, addr raw) == 0
+      var disabledInputFlags = Cflag(
+        IGNBRK or BRKINT or PARMRK or INPCK or ISTRIP or INLCR or IGNCR or
+        ICRNL or IXON)
+      when declared(IMAXBEL):
+        disabledInputFlags = disabledInputFlags or Cflag(IMAXBEL)
+      check (raw.c_iflag and disabledInputFlags) == 0
+      check (raw.c_lflag and ECHONL) == 0
+      check raw.c_oflag == configured.c_oflag
+
+      pty.slave.write("A\nB")
+      pty.slave.flushFile()
+      var rendered = newString(4)
+      check posix.read(pty.master, addr rendered[0], rendered.len) ==
+        rendered.len
+      check rendered == "A\r\nB"
+
+      let carriageReturn = "\r"
+      check posix.write(pty.master, unsafeAddr carriageReturn[0],
+        carriageReturn.len) == carriageReturn.len
+      check session.readEvent(timeoutMs = 200).keyEvent.key == keyEnter
+
+      session.close()
+      var restored: Termios
+      check tcGetAttr(slaveFd, addr restored) == 0
+      check restored.c_iflag == configured.c_iflag
+      check restored.c_oflag == configured.c_oflag
+      check restored.c_cflag == configured.c_cflag
+      check restored.comparableLocalFlags == configured.comparableLocalFlags
+      check restored.c_cc == configured.c_cc
+
     test "reads real PTY bytes as normalized events":
       var pty = openPty()
       defer: pty.close()

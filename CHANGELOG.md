@@ -10,6 +10,9 @@ This project follows Semantic Versioning.
   Console key-repeat count.
 - Enable processed output together with Windows virtual-terminal processing,
   while continuing to restore the exact inherited console mode on close.
+- Make POSIX raw input ignore inherited character-translation and newline-echo
+  flags without changing output post-processing, then restore the exact
+  inherited termios state on close.
 
 ## [v0.1.0] - 2026-09-01
 
