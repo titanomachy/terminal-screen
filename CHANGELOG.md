@@ -2,7 +2,7 @@
 
 This project follows Semantic Versioning.
 
-## Unreleased
+## [v0.1.1] - 2026-09-02
 
 ### Fixed
 
