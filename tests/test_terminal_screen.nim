@@ -499,3 +499,6 @@ when defined(windows):
 
     test "partial setup failure restores console modes and ownership":
       check runWindowsConsoleScenario("partial-setup") == 0
+
+    test "native input preserves AltGr text and key repeat counts":
+      check runWindowsConsoleScenario("native-input") == 0

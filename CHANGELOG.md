@@ -2,6 +2,15 @@
 
 This project follows Semantic Versioning.
 
+## Unreleased
+
+### Fixed
+
+- Preserve printable AltGr input and every event represented by a Windows
+  Console key-repeat count.
+- Enable processed output together with Windows virtual-terminal processing,
+  while continuing to restore the exact inherited console mode on close.
+
 ## [v0.1.0] - 2026-09-01
 
 ### Fixed

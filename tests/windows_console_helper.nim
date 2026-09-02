@@ -13,10 +13,14 @@ when defined(windows):
     EnableWindowInput = 0x0008'i32
     EnableQuickEditMode = 0x0040'i32
     EnableExtendedFlags = 0x0080'i32
+    EnableProcessedOutput = 0x0001'i32
     EnableVirtualTerminalProcessing = 0x0004'i32
 
     KeyEventType = 0x0001'i16
     VkC = 0x43'i16
+    VkLeft = 0x25'i16
+    VkQ = 0x51'i16
+    RightAltPressed = 0x0001'i32
     LeftCtrlPressed = 0x0008'i32
 
   type
@@ -109,8 +113,8 @@ when defined(windows):
       EnableProcessedInput or EnableLineInput or EnableEchoInput or
       EnableQuickEditMode or EnableExtendedFlags
     )
-    result.outputMode = console.output.consoleMode() and
-      not DWORD(EnableVirtualTerminalProcessing)
+    result.outputMode = console.output.consoleMode() and not DWORD(
+      EnableProcessedOutput or EnableVirtualTerminalProcessing)
     checkApi(setConsoleMode(console.input.osHandle(), result.inputMode),
       "cannot establish the Windows input-mode baseline")
     checkApi(setConsoleMode(console.output.osHandle(), result.outputMode),
@@ -137,7 +141,8 @@ when defined(windows):
     checkValue(console.input.consoleMode() == expectedInput,
       "Windows raw input mode was not enabled exactly")
     checkValue(console.output.consoleMode() ==
-        (baselineOutput or DWORD(EnableVirtualTerminalProcessing)),
+        (baselineOutput or DWORD(
+          EnableProcessedOutput or EnableVirtualTerminalProcessing)),
       "Windows virtual-terminal output mode was not enabled exactly")
     checkValue(console.output.cursorInfo().visible == 0,
       "the Windows console cursor was not hidden")
@@ -164,6 +169,21 @@ when defined(windows):
     checkApi(writeConsoleInput(console.input.osHandle(), addr record, 1,
       addr written), "cannot inject Ctrl+C into the Windows console")
     checkValue(written == 1, "Windows did not accept the Ctrl+C input record")
+
+  proc writeKey(console: IsolatedConsole; virtualKey, character: int16;
+                controlState: DWORD = 0; repeatCount: int16 = 1) =
+    var record = KEY_EVENT_RECORD(
+      eventType: KeyEventType,
+      bKeyDown: 1,
+      wRepeatCount: repeatCount,
+      wVirtualKeyCode: virtualKey,
+      uChar: character,
+      dwControlKeyState: controlState
+    )
+    var written: cint
+    checkApi(writeConsoleInput(console.input.osHandle(), addr record, 1,
+      addr written), "cannot inject a key into the Windows console")
+    checkValue(written == 1, "Windows did not accept the key input record")
 
   proc normalCleanupScenario() =
     var console = openIsolatedConsole()
@@ -224,6 +244,32 @@ when defined(windows):
       console.input, console.output, sessionOptions())
     reopened.close()
 
+  proc nativeInputScenario() =
+    var console = openIsolatedConsole()
+    defer: console.close()
+    let baseline = console.prepareBaseline()
+
+    let session = openSession(
+      console.input, console.output, sessionOptions())
+    try:
+      console.writeKey(VkQ, int16(ord('@')),
+        DWORD(RightAltPressed or LeftCtrlPressed))
+      let altGr = session.readEvent(timeoutMs = 500)
+      checkValue(altGr.kind == eventKey and
+          altGr.keyEvent.key == keyText and altGr.keyEvent.text == "@" and
+          altGr.keyEvent.modifiers == {},
+        "Windows AltGr text was not normalized as printable input")
+
+      console.writeKey(VkLeft, 0, repeatCount = 3)
+      for _ in 0 ..< 3:
+        let repeated = session.readEvent(timeoutMs = 500)
+        checkValue(repeated.kind == eventKey and
+            repeated.keyEvent.key == keyArrowLeft,
+          "a repeated Windows key record did not emit every event")
+    finally:
+      session.close()
+    console.checkRestoredState(baseline.inputMode, baseline.outputMode)
+
   if paramCount() != 1:
     quit("expected one Windows console lifecycle scenario", QuitFailure)
 
@@ -234,6 +280,8 @@ when defined(windows):
     exceptionCleanupScenario()
   of "partial-setup":
     partialSetupScenario()
+  of "native-input":
+    nativeInputScenario()
   else:
     quit("unknown Windows console lifecycle scenario: " & paramStr(1),
       QuitFailure)

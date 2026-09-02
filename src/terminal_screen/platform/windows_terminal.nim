@@ -13,6 +13,7 @@ const
   EnableWindowInput = 0x0008'i32
   EnableExtendedFlags = 0x0080'i32
   EnableQuickEditMode = 0x0040'i32
+  EnableProcessedOutput = 0x0001'i32
   EnableVirtualTerminalProcessing = 0x0004'i32
 
   KeyEventType = 0x0001'i16
@@ -65,6 +66,8 @@ type
     outputModeChanged: bool
     inputIsConsole: bool
     pendingHighSurrogate: uint16
+    repeatedEvent: InputEvent
+    remainingRepeats: int
 
 proc getConsoleMode(handle: Handle; mode: ptr DWORD): WINBOOL {.
   stdcall, dynlib: "kernel32", importc: "GetConsoleMode".}
@@ -121,8 +124,8 @@ proc startPlatform*(input, output: File; enableRaw, enableAnsi: bool): PlatformS
 
   if enableAnsi and getConsoleMode(
       result.outputHandle, addr result.originalOutputMode) != 0:
-    let mode = result.originalOutputMode or
-      DWORD(EnableVirtualTerminalProcessing)
+    let mode = result.originalOutputMode or DWORD(
+      EnableProcessedOutput or EnableVirtualTerminalProcessing)
     if setConsoleMode(result.outputHandle, mode) == 0:
       if result.inputModeChanged:
         discard setConsoleMode(result.inputHandle, result.originalInputMode)
@@ -155,7 +158,7 @@ proc modifiers(controlState: DWORD): set[Modifier] =
 
 proc translateKey(state: var PlatformState;
                   record: KEY_EVENT_RECORD): Option[InputEvent] =
-  let mods = modifiers(record.dwControlKeyState)
+  var mods = modifiers(record.dwControlKeyState)
   let virtualKey = record.wVirtualKeyCode
   let character = uint16(record.uChar)
 
@@ -192,6 +195,15 @@ proc translateKey(state: var PlatformState;
       text = $char(ord('a') + int(character) - 1),
       modifiers = mods + {modifierCtrl}
     ))
+
+  # Windows reports AltGr text as Left Ctrl + Right Alt. Once the console has
+  # already translated that chord into a printable character, expose it as
+  # text rather than as a command-modified key.
+  if character != 0'u16 and
+      (record.dwControlKeyState and DWORD(RightAltPressed)) != 0 and
+      (record.dwControlKeyState and DWORD(LeftCtrlPressed)) != 0:
+    mods.excl modifierAlt
+    mods.excl modifierCtrl
   if character in 0xd800'u16 .. 0xdbff'u16:
     state.pendingHighSurrogate = character
     return none(InputEvent)
@@ -215,6 +227,10 @@ proc translateKey(state: var PlatformState;
   some(keyInput(keyUnknown, modifiers = mods))
 
 proc readPlatform*(state: var PlatformState; timeoutMs: int): PlatformRead =
+  if state.remainingRepeats > 0:
+    dec state.remainingRepeats
+    return eventRead(state.repeatedEvent)
+
   let waitTime = if timeoutMs < 0: INFINITE else: int32(timeoutMs)
   let waitResult = waitForSingleObject(state.inputHandle, waitTime)
   if waitResult == WAIT_TIMEOUT:
@@ -235,6 +251,9 @@ proc readPlatform*(state: var PlatformState; timeoutMs: int): PlatformRead =
       if record.eventType == KeyEventType and record.bKeyDown != 0:
         let event = state.translateKey(record)
         if event.isSome:
+          state.repeatedEvent = event.get()
+          state.remainingRepeats = max(0,
+            int(uint16(record.wRepeatCount)) - 1)
           return eventRead(event.get())
         continue
       return timedOut()
