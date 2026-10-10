@@ -1,0 +1,13 @@
+{"version": 3, "term": {"cols": 64, "rows": 12}, "command": "python3 scripts/record_demo.py keys build/read_keys", "title": "Reading keys safely", "env": {"TERM": "xterm-256color"}}
+[0.059, "o", "\u001b[?25l"]
+[0.001, "o", "\u001b[?25lPress keys; Escape or Ctrl+C exits.\r\r\r\n"]
+[0.502, "o", "keyText: a\r\r\r\n"]
+[0.502, "o", "keyText: é\r\r\r\n"]
+[0.502, "o", "keyArrowUp\r\r\r\n"]
+[0.502, "o", "keyArrowLeft modifiers={modifierCtrl}\r\r\r\n"]
+[0.501, "o", "keyEnter\r\r\r\n"]
+[0.551, "o", "resized to 60x12\r\r\r\n"]
+[0.643, "o", "\u001b[?25hSession closed; terminal modes and cursor restored.\r\r\n"]
+[0.000, "o", "\u001b[?25l"]
+[1.000, "o", "\u001b[?25h"]
+[0.005, "x", "0"]

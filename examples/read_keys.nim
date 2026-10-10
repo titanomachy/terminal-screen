@@ -1,3 +1,4 @@
+## Run: nim r --path:src examples/read_keys.nim
 import terminal_screen
 
 let capabilities = detectCapabilities()
@@ -20,6 +21,8 @@ withTerminalSession session, options:
       stdout.write($event.keyEvent.key)
       if event.keyEvent.text.len > 0:
         stdout.write(": ", event.keyEvent.text)
+      if event.keyEvent.modifiers != {}:
+        stdout.write(" modifiers=", $event.keyEvent.modifiers)
       stdout.write("\r\n")
       stdout.flushFile()
     of eventResize:
@@ -30,3 +33,5 @@ withTerminalSession session, options:
       break
     of eventTimeout:
       discard
+
+echo "Session closed; terminal modes and cursor restored."

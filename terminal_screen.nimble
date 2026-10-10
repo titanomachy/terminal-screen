@@ -25,6 +25,9 @@ task test, "Run the terminal_screen test suite":
 task examples, "Check that all terminal_screen examples compile":
   exec "nim check --path:src examples/read_keys.nim"
   exec "nim check --path:src examples/cursor_commands.nim"
+  exec "nim check --path:src examples/detect_terminal.nim"
+  exec "nim check --path:src examples/decode_input.nim"
+  exec "nim check --path:src examples/redirected_input.nim"
 
 task docs, "Generate terminal_screen API documentation":
   exec "nim doc --project --index:on --outdir:build/docs --path:src src/terminal_screen.nim"

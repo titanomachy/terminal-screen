@@ -1,14 +1,14 @@
 # TerminalScreen
 
-TerminalScreen is a dependency-free, pure-Nim foundation for safe interactive
-terminal applications. Version 0.1.0 provides guarded raw-mode sessions,
-normalized key input, cursor control, terminal detection, viewport geometry,
-resize events, timeouts, EOF handling, and Unix/Windows backends.
+A dependency-free, pure-Nim foundation for interactive terminal applications:
+guarded raw-mode sessions, normalized input events, cursor control, capability
+detection, geometry, timeouts, and EOF handling. Importing the library does not
+change terminal state.
 
-It is the low-level terminal layer for TerminalPrompt and future interactive
-packages in the Nim Terminal Suite. Styling and cell-width-aware text belong in
-[TerminalStyle](https://github.com/titanomachy/terminal-style); layout, prompt
-policy, and widget state deliberately remain outside this package.
+TerminalScreen is the low-level terminal layer for TerminalPrompt and future
+interactive packages in the Nim Terminal Suite. Styling and cell-width-aware
+text belong in [TerminalStyle](https://github.com/titanomachy/terminal-style);
+layout, prompt policy, and widget state belong in higher-level packages.
 
 ## Requirements
 
@@ -16,12 +16,74 @@ policy, and widget state deliberately remain outside this package.
 - Linux, macOS, or Windows
 - A VT/ANSI-capable terminal for cursor commands
 
-TerminalScreen uses only the Nim standard library and operating-system APIs.
+Only the Nim standard library and operating-system APIs are required. CI covers
+all three platforms with Nim 2.0.x, 2.2.x, and stable.
 
-## Reading keys safely
+## Contents
 
-`withTerminalSession` restores the exact saved OS input mode and shows a cursor
-hidden by the session after normal return or an exception:
+- [Installation](#installation)
+- [Quick start](#quick-start)
+- [API overview](#api-overview)
+  - [Reading keys safely](#reading-keys-safely)
+  - [Detection and geometry](#detection-and-geometry)
+  - [Cursor control](#cursor-control)
+  - [Incremental decoding](#incremental-decoding)
+  - [Redirected input and EOF](#redirected-input-and-eof)
+- [Session and cleanup guarantees](#session-and-cleanup-guarantees)
+- [Examples](#examples)
+- [Development and documentation](#development-and-documentation)
+- [License](#license)
+
+## Installation
+
+Install from GitHub with Nimble:
+
+```sh
+nimble install https://github.com/titanomachy/terminal-screen
+```
+
+Use `import terminal_screen` for the complete public API.
+
+## Quick start
+
+Save this as `main.nim`. It reads one event and restores the terminal before
+returning:
+
+```nim
+import terminal_screen
+
+let options = defaultSessionOptions()
+withTerminalSession session, options:
+  stdout.write("Press a key.\r\n")
+  stdout.flushFile()
+  let event = session.readEvent()
+  if event.kind == eventKey:
+    stdout.write("key: ", $event.keyEvent.key, "\r\n")
+    stdout.flushFile()
+```
+
+```sh
+nim r main.nim
+```
+
+Run it in an interactive terminal. For a loop that handles keys, resize events,
+and EOF, try `nim r --path:src examples/read_keys.nim` from this repository.
+
+## API overview
+
+| Component | Main API | Purpose |
+| --- | --- | --- |
+| [Reading keys safely](#reading-keys-safely) | `withTerminalSession`, `readEvent`, `SessionOptions` | Scoped terminal modes, keys, resize events, and timeouts |
+| [Detection and geometry](#detection-and-geometry) | `isTerminal`, `detectCapabilities`, `tryTerminalSize` | Choose terminal behavior and query viewport dimensions |
+| [Cursor control](#cursor-control) | `moveCursorTo`, `cursorPositionCode`, `cursorUpCode` | One-based cursor movement and batched ANSI commands |
+| [Incremental decoding](#incremental-decoding) | `InputDecoder`, `feed`, `nextEvent`, `finish` | Decode fragmented bytes without a live terminal |
+| [Redirected input and EOF](#redirected-input-and-eof) | `requireTerminal`, `eventEndOfInput` | Read files and pipes through the same event API |
+
+### Reading keys safely
+
+`withTerminalSession` restores saved terminal modes after normal return or an
+exception. In raw mode, Ctrl+C arrives as `keyCtrlC`, so the application can exit
+its loop normally. A lone Escape uses a short configurable timeout.
 
 ```nim
 import terminal_screen
@@ -30,130 +92,193 @@ var options = defaultSessionOptions()
 options.hideCursor = true
 
 withTerminalSession session, options:
-  stdout.write("Press keys; Escape or Ctrl+C exits.\r\n")
-  stdout.flushFile()
-
   while true:
     let event = session.readEvent()
     case event.kind
     of eventKey:
       if event.keyEvent.key in {keyEscape, keyCtrlC}:
         break
-      if event.keyEvent.key == keyText:
-        stdout.write("text: ", event.keyEvent.text, "\r\n")
-        stdout.flushFile()
-    of eventResize:
-      stdout.write("size: ", event.size.columns, "x", event.size.rows, "\r\n")
+      stdout.write($event.keyEvent.key, " ", event.keyEvent.text, "\r\n")
       stdout.flushFile()
+    of eventResize:
+      discard # Redraw using event.size.columns and event.size.rows.
     of eventEndOfInput:
       break
     of eventTimeout:
       discard
 ```
 
-Raw mode disables terminal-generated `SIGINT`, so keyboard `Ctrl+C` is returned
-as `keyCtrlC` and the application can leave its session normally. A lone Escape
-is distinguished from an escape-sequence prefix with a short configurable
-timeout.
+[![Normalized text, navigation, modifier, and resize events](docs/images/read_keys.gif)](examples/read_keys.nim)
 
-## Detection and geometry
+[Example](examples/read_keys.nim) · [Source recording](docs/recordings/read_keys.cast)
 
-Check capabilities before choosing an interactive or line-oriented interface:
+```sh
+nim r --path:src examples/read_keys.nim
+```
+
+Use `session.readEvent(timeoutMs = 100)` for bounded waits; `eventTimeout` means
+no event arrived within that wait. The recording scripts text, navigation,
+a resize, and Ctrl+C through a private terminal.
+
+### Detection and geometry
+
+Check capabilities before opening an interactive session. `tryTerminalSize`
+returns `none` when output has no terminal geometry.
 
 ```nim
 import std/options
 import terminal_screen
 
 let capabilities = detectCapabilities()
-if capabilities.inputIsTerminal and capabilities.outputIsTerminal:
-  let size = tryTerminalSize()
-  if size.isSome:
-    echo size.get().columns, " columns x ", size.get().rows, " rows"
+echo "Input terminal: ", capabilities.inputIsTerminal
+echo "ANSI output: ", capabilities.supportsAnsi
+
+let size = tryTerminalSize()
+if size.isSome:
+  echo size.get().columns, " columns x ", size.get().rows, " rows"
 else:
-  echo "Input or output is redirected; use a non-interactive fallback."
+  echo "Geometry unavailable; use a non-interactive fallback."
 ```
 
-Strict sessions reject redirected streams by default. Set
-`requireTerminal = false` to use normalized EOF/input behavior with redirected
-files or pipes; raw mode, automatic cursor hiding, and resize monitoring then
-degrade according to detected capabilities.
+[![Detected capabilities and a 64-column by 12-row viewport](docs/images/detect_terminal.png)](examples/detect_terminal.nim)
 
-## Cursor control
+[Example](examples/detect_terminal.nim) · [Source recording](docs/recordings/detect_terminal.cast)
 
-Coordinates are one-based, matching ANSI terminal protocols:
+```sh
+nim r --path:src examples/detect_terminal.nim
+```
+
+### Cursor control
+
+Coordinates are one-based. Stream helpers write immediately; pure command
+builders let you batch movement and text into one write. A session enables VT
+output on supported Windows consoles and restores the previous console mode.
 
 ```nim
 import terminal_screen
 
-if stdout.isTerminal:
-  var options = defaultSessionOptions()
-  options.rawMode = false
-  options.hideCursor = true
-  options.monitorResize = false
+var options = defaultSessionOptions()
+options.rawMode = false
+options.hideCursor = true
+options.monitorResize = false
 
-  withTerminalSession session, options:
-    moveCursorTo(column = 10, row = 4, output = stdout)
-    stdout.write("Hello\r\n")
-    stdout.flushFile()
+withTerminalSession session, options:
+  moveCursorTo(column = 5, row = 3)
+  stdout.write("Working...")
+  stdout.write(cursorPositionCode(column = 5, row = 3), "Done.     \r\n")
+  stdout.flushFile()
 ```
 
-The final `\r\n` returns the cursor to the first column on a new line before the
-program exits. Unlike `echo`, `stdout.write` does not append a newline. Without
-one, shells such as zsh may display a `%` after the text to mark an incomplete
-output line; that marker is produced by the shell, not by TerminalScreen.
+[![A progress bar updated in place with batched cursor commands](docs/images/cursor_commands.gif)](examples/cursor_commands.nim)
 
-Pure command builders such as `cursorPositionCode`, `cursorUpCode`, and
-`cursorColumnCode` are available for batching and deterministic tests. Opening
-a session also enables VT output on supported Windows consoles and restores its
-previous console mode afterward.
+[Example](examples/cursor_commands.nim) · [Source recording](docs/recordings/cursor_commands.cast)
 
-## Incremental decoding
+```sh
+nim r --path:src examples/cursor_commands.nim
+```
 
-`InputDecoder` can be fed scripted or fragmented bytes without a live terminal.
-This is the test seam intended for TerminalPrompt:
+The example animates these writes. `stdout.write` adds no newline; end the final
+line with `\r\n` to return the shell to the first column of a new line.
+
+### Incremental decoding
+
+`InputDecoder` retains incomplete UTF-8 and escape sequences until more bytes
+arrive. It supports text, navigation, common xterm modifiers, unknown sequences,
+and a single EOF event after `finish`.
 
 ```nim
 import std/options
 import terminal_screen
 
 var decoder = initInputDecoder()
-decoder.feed("é\e[A")
+decoder.feed("\xC3")           # First byte of é: no event yet.
+assert decoder.nextEvent().isNone
+decoder.feed("\xA9\e[A")      # Completes é, then an Up arrow.
 
 while true:
   let event = decoder.nextEvent()
   if event.isNone:
     break
-  # Produces keyText("é"), then keyArrowUp.
-  discard event.get()
+  echo event.get().keyEvent.key
+
+decoder.finish()
+echo decoder.nextEvent().get().kind # eventEndOfInput
 ```
 
-The decoder handles UTF-8 text, Enter, Escape, arrows, Home/End, Insert/Delete,
-Page Up/Down, Tab/Backtab, Backspace, Space, Ctrl+C, Ctrl+D, common xterm
-modifiers, SS3 navigation, unknown sequences, and EOF.
+[![Fragmented UTF-8 and escape sequences decoded as complete events](docs/images/decode_input.gif)](examples/decode_input.nim)
+
+[Example](examples/decode_input.nim) · [Source recording](docs/recordings/decode_input.cast)
+
+```sh
+nim r --path:src examples/decode_input.nim --demo
+```
+
+### Redirected input and EOF
+
+Strict sessions require terminal streams by default. Set `requireTerminal =
+false` for files or pipes; raw mode, cursor hiding, and resize monitoring degrade
+according to capabilities.
+
+```nim
+import terminal_screen
+
+var options = defaultSessionOptions()
+options.requireTerminal = false
+
+withTerminalSession session, options:
+  while true:
+    let event = session.readEvent()
+    case event.kind
+    of eventKey:
+      echo event.keyEvent.key, " text=", event.keyEvent.text
+    of eventEndOfInput:
+      echo "eventEndOfInput"
+      break
+    of eventResize, eventTimeout:
+      discard
+```
+
+[![Piped text normalized into key events followed by EOF](docs/images/redirected_input.png)](examples/redirected_input.nim)
+
+[Example](examples/redirected_input.nim) · [Source recording](docs/recordings/redirected_input.cast)
+
+```sh
+# POSIX shell
+printf 'Hi\n' | nim r --path:src examples/redirected_input.nim
+```
 
 ## Session and cleanup guarantees
 
-- A session captures terminal modes before changing them and restores the exact
-  snapshot in reverse order.
+- Terminal modes are saved before changes and restored exactly in reverse order.
 - Setup is transactional: a later cursor/output failure rolls back an already
   enabled raw input mode. `close` is idempotent.
-- One session may own process-wide terminal state at a time; nested opens raise
+- Only one session may own process-wide terminal state; nested opens raise
   `SessionActiveError`.
-- The session borrows its `File` streams. Keep them open until cleanup finishes.
-- `readEvent` consumes only the bytes needed for its one normalized event;
-  closing and reopening a session over the same input preserves later bytes.
-- Resize events are detected through bounded geometry polling in 0.1.0, avoiding
-  unsafe allocation or cleanup inside a signal handler.
+- Sessions borrow their `File` streams; keep them open until cleanup finishes.
+- `readEvent` consumes only the bytes needed for one event. Closing and reopening
+  over the same input preserves later bytes.
+- Resize detection uses bounded geometry polling without allocation or terminal
+  cleanup inside signal handlers.
 
-Cleanup runs for normal return, decoded Ctrl+C cancellation, EOF, and Nim
-exceptions when `withTerminalSession` is used. No application can restore a
-terminal after `SIGKILL`, power loss, or another uncatchable process failure.
-On Unix, `reset` or `tput reset` is an emergency recovery measure—not the normal
-shutdown design.
+`withTerminalSession` runs cleanup on normal return, decoded Ctrl+C cancellation,
+EOF, and Nim exceptions. Uncatchable failures such as `SIGKILL` cannot run
+cleanup; Unix `reset` or `tput reset` provides emergency recovery.
 
-## Development
+## Examples
 
-Nimble manages the package and all generated output stays under `build/`:
+Every visual above links to its runnable example. Run from the repository root:
+
+| Example | Command |
+| --- | --- |
+| [Key and resize events](examples/read_keys.nim) | `nim r --path:src examples/read_keys.nim` |
+| [Capabilities and geometry](examples/detect_terminal.nim) | `nim r --path:src examples/detect_terminal.nim` |
+| [Animated cursor updates](examples/cursor_commands.nim) | `nim r --path:src examples/cursor_commands.nim` |
+| [Fragmented input](examples/decode_input.nim) | `nim r --path:src examples/decode_input.nim --demo` |
+| [Redirected input](examples/redirected_input.nim) | `printf 'Hi\n' \| nim r --path:src examples/redirected_input.nim` (POSIX shell) |
+
+Compile-check all examples with `nimble examples`.
+
+## Development and documentation
 
 ```sh
 nimble check
@@ -164,8 +289,21 @@ nimble docs
 nimble releaseCheck
 ```
 
-Runnable examples are in `examples/`. Generated API documentation is written to
-`build/docs/terminal_screen.html`. `nimble test` also runs process-isolated
-lifecycle scenarios: POSIX uses a PTY, while Windows allocates a private Console
-for mode and cursor restoration checks. These never modify the developer
-terminal.
+Generated compiler output and API documentation stay under `build/`; the API
+entry point is `build/docs/terminal_screen.html`. `nimble test` rebuilds the
+lifecycle helpers and runs isolated PTY or private Windows Console scenarios
+without modifying the developer's terminal.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution requirements. To rebuild
+the README media on Linux or macOS:
+
+```sh
+python3 scripts/regenerate_media.py
+```
+
+Recording tools, geometry, font, and rendering details are documented in
+[docs/recordings/README.md](docs/recordings/README.md).
+
+## License
+
+TerminalScreen is released under the [MIT License](LICENSE).
