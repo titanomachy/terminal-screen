@@ -156,6 +156,24 @@ suite "cursor commands":
       HideCursorCode & "\e[2;7H" & ShowCursorCode
 
 suite "terminal detection and non-terminal sessions":
+  test "default-stream session templates accept defaults and options expressions":
+    # Compile only: opening the default raw session must not touch the caller's
+    # terminal. Referencing the injected value verifies expansion of the body.
+    check compiles(block:
+      withTerminalSession session:
+        discard session.isOpen)
+    check compiles(block:
+      let opts = nonTerminalOptions()
+      withTerminalSession session, opts:
+        discard session.isOpen)
+    check compiles(block:
+      withTerminalSession session, nonTerminalOptions():
+        discard session.isOpen)
+    check compiles(block:
+      let opts = nonTerminalOptions()
+      withTerminalSession session, options = opts:
+        discard session.isOpen)
+
   test "reports redirected files without invented geometry":
     let inputTemp = createTempFile("terminal_screen_input_", ".txt")
     let outputTemp = createTempFile("terminal_screen_output_", ".txt")

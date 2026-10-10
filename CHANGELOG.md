@@ -2,6 +2,13 @@
 
 This project follows Semantic Versioning.
 
+## Unreleased
+
+### Fixed
+
+- Fix default-stream `withTerminalSession` expansion for omitted options,
+  differently named option variables, and option expressions.
+
 ## [v0.1.1] - 2026-09-02
 
 ### Fixed

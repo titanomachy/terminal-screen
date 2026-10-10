@@ -52,8 +52,7 @@ returning:
 ```nim
 import terminal_screen
 
-let options = defaultSessionOptions()
-withTerminalSession session, options:
+withTerminalSession session:
   stdout.write("Press a key.\r\n")
   stdout.flushFile()
   let event = session.readEvent()
@@ -82,7 +81,8 @@ and EOF, try `nim r --path:src examples/read_keys.nim` from this repository.
 ### Reading keys safely
 
 `withTerminalSession` restores saved terminal modes after normal return or an
-exception. In raw mode, Ctrl+C arrives as `keyCtrlC`, so the application can exit
+exception. Omit options for the defaults, or pass any `SessionOptions` value or
+expression. In raw mode, Ctrl+C arrives as `keyCtrlC`, so the application can exit
 its loop normally. A lone Escape uses a short configurable timeout.
 
 ```nim

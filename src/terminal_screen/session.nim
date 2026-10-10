@@ -211,11 +211,14 @@ proc readEvent*(session: TerminalSession; timeoutMs = -1): InputEvent =
       if timeoutMs >= 0 and elapsedMilliseconds(started) >= timeoutMs:
         return timeoutInput()
 
-template withTerminalSession*(sessionName: untyped; options: SessionOptions;
+# Defer argument types to openSession so overload resolution cannot check the
+# body before the session identifier has been injected.
+template withTerminalSession*(sessionName: untyped; options: untyped;
                               body: untyped): untyped =
   ## Runs `body` inside a default-stream terminal session.
+  ## Accepts an options value or expression without requiring a variable name.
   block:
-    let sessionName {.inject.} = openSession(options = options)
+    let sessionName {.inject.} = openSession(stdin, stdout, options)
     try:
       body
     finally:
@@ -223,11 +226,15 @@ template withTerminalSession*(sessionName: untyped; options: SessionOptions;
 
 template withTerminalSession*(sessionName: untyped; body: untyped): untyped =
   ## Runs `body` with default streams and session options.
-  withTerminalSession(sessionName, defaultSessionOptions()):
-    body
+  block:
+    let sessionName {.inject.} = openSession()
+    try:
+      body
+    finally:
+      sessionName.close()
 
-template withTerminalSession*(sessionName: untyped; input, output: File;
-                              options: SessionOptions; body: untyped): untyped =
+template withTerminalSession*(sessionName: untyped; input, output: untyped;
+                              options: untyped; body: untyped): untyped =
   ## Runs `body` with explicit borrowed streams and session options.
   block:
     let sessionName {.inject.} = openSession(input, output, options)
