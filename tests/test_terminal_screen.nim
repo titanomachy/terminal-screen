@@ -425,6 +425,21 @@ when defined(posix):
     pty.slave.close()
     discard posix.close(pty.master)
 
+  proc readOutput(pty: Pty; count: int): string =
+    # PTY output can arrive in pieces, including around newline translation.
+    # Bound every wait so a missing write fails instead of hanging the suite.
+    result = newString(count)
+    var received = 0
+    while received < count:
+      var descriptor = TPollfd(fd: pty.master, events: POLLIN)
+      if posix.poll(addr descriptor, Tnfds(1), 500) <= 0:
+        break
+      let chunk = posix.read(pty.master, addr result[received], count - received)
+      if chunk <= 0:
+        break
+      received += chunk
+    result.setLen(received)
+
   proc ptyOptions(): SessionOptions =
     result = defaultSessionOptions()
     result.hideCursor = false
@@ -467,12 +482,10 @@ when defined(posix):
       var options = ptyOptions()
       options.hideCursor = true
       let session = openSession(pty.slave, pty.slave, options)
-      var hidden = newString(HideCursorCode.len)
-      check posix.read(pty.master, addr hidden[0], hidden.len) == hidden.len
+      let hidden = pty.readOutput(HideCursorCode.len)
       check hidden == HideCursorCode
       session.close()
-      var shown = newString(ShowCursorCode.len)
-      check posix.read(pty.master, addr shown[0], shown.len) == shown.len
+      let shown = pty.readOutput(ShowCursorCode.len)
       check shown == ShowCursorCode
 
     test "raw mode is active only while the session owns it":
@@ -529,9 +542,7 @@ when defined(posix):
 
       pty.slave.write("A\nB")
       pty.slave.flushFile()
-      var rendered = newString(4)
-      check posix.read(pty.master, addr rendered[0], rendered.len) ==
-        rendered.len
+      let rendered = pty.readOutput(4)
       check rendered == "A\r\nB"
 
       let carriageReturn = "\r"
