@@ -10,6 +10,8 @@ This project follows Semantic Versioning.
   differently named option variables, and option expressions.
 - Report normal Windows pipe closure as end-of-input after decoding queued
   bytes, rather than raising `TerminalIOError`.
+- Preserve fragmented escape sequences across short or non-blocking reads;
+  expire their Escape timer independently of each caller's read timeout.
 
 ## [v0.1.1] - 2026-09-02
 

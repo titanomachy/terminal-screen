@@ -5,8 +5,7 @@ guarded raw-mode sessions, normalized input events, cursor control, capability
 detection, geometry, timeouts, and EOF handling. Importing the library does not
 change terminal state.
 
-TerminalScreen is the low-level terminal layer for [TerminalPrompt](https://github.com/titanomachy/terminal-prompt) and future
-interactive packages in the Nim Terminal Suite. Styling and cell-width-aware
+TerminalScreen is the low-level terminal layer for [TerminalPrompt](https://github.com/titanomachy/terminal-prompt) and future interactive packages in [TerminalDeck](https://github.com/titanomachy/terminal-deck). Styling and cell-width-aware
 text belong in [TerminalStyle](https://github.com/titanomachy/terminal-style);
 layout, prompt policy, and widget state belong in higher-level packages.
 
@@ -120,7 +119,9 @@ nim r --path:src examples/read_keys.nim
 ```
 
 Use `session.readEvent(timeoutMs = 100)` for bounded waits; `eventTimeout` means
-no event arrived within that wait. The recording scripts text, navigation,
+no event arrived within that wait. Shorter waits preserve incomplete escape
+sequences; `escapeTimeoutMs` measures the gap between sequence bytes across
+read calls. The recording scripts text, navigation,
 a resize, and Ctrl+C through a private terminal.
 
 ### Detection and geometry

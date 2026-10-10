@@ -479,6 +479,45 @@ when defined(posix):
       check session.readEvent(timeoutMs = 200).keyEvent.key == keyArrowUp
       check session.readEvent(timeoutMs = 200).keyEvent.key == keyCtrlC
 
+    test "short reads preserve fragmented escape sequences":
+      var pty = openPty()
+      defer: pty.close()
+      var options = ptyOptions()
+      options.monitorResize = false
+      options.escapeTimeoutMs = 1000
+      let session = openSession(pty.slave, pty.slave, options)
+      defer: session.close()
+
+      let escape = "\e"
+      check posix.write(pty.master, unsafeAddr escape[0], escape.len) == escape.len
+      check session.readEvent(timeoutMs = 0).kind == eventTimeout
+      check session.readEvent(timeoutMs = 2).kind == eventTimeout
+      let bracket = "["
+      check posix.write(pty.master, unsafeAddr bracket[0], bracket.len) == bracket.len
+      check session.readEvent(timeoutMs = 0).kind == eventTimeout
+      let suffix = "Ax"
+      check posix.write(pty.master, unsafeAddr suffix[0], suffix.len) == suffix.len
+      let arrow = session.readEvent(timeoutMs = 200)
+      check arrow.kind == eventKey and arrow.keyEvent.key == keyArrowUp
+      check session.readEvent(timeoutMs = 200).keyEvent.text == "x"
+
+    test "the Escape timeout survives separate read calls":
+      var pty = openPty()
+      defer: pty.close()
+      var options = ptyOptions()
+      options.monitorResize = false
+      options.escapeTimeoutMs = 50
+      let session = openSession(pty.slave, pty.slave, options)
+      defer: session.close()
+
+      let escape = "\e"
+      check posix.write(pty.master, unsafeAddr escape[0], escape.len) == escape.len
+      check session.readEvent(timeoutMs = 5).kind == eventTimeout
+      sleep(100)
+      let event = session.readEvent(timeoutMs = 0)
+      check event.kind == eventKey and event.keyEvent.key == keyEscape
+      check session.readEvent(timeoutMs = 0).kind == eventTimeout
+
     test "reopened sessions preserve unread pasted input":
       var pty = openPty()
       defer: pty.close()

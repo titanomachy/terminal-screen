@@ -25,6 +25,7 @@ type
     detectedCapabilities: TerminalCapabilities
     platform: PlatformState
     decoder: InputDecoder
+    escapeLastByteAt: Option[MonoTime]
     lastSize: Option[TerminalSize]
     inputEnded: bool
     cursorHidden: bool
@@ -156,7 +157,8 @@ proc readEvent*(session: TerminalSession; timeoutMs = -1): InputEvent =
   ##
   ## `timeoutMs = -1` waits indefinitely. A non-negative timeout returns
   ## `eventTimeout` when no input or resize is available. A lone Escape is
-  ## resolved after `SessionOptions.escapeTimeoutMs`.
+  ## resolved after `SessionOptions.escapeTimeoutMs` without another sequence
+  ## byte. Shorter read timeouts preserve the prefix and its timer across calls.
   if not session.isOpen:
     raise newException(TerminalStateError, "cannot read from a closed session")
   if timeoutMs < -1:
@@ -167,6 +169,7 @@ proc readEvent*(session: TerminalSession; timeoutMs = -1): InputEvent =
   while true:
     let decoded = session.decoder.nextEvent()
     if decoded.isSome:
+      session.escapeLastByteAt = none(MonoTime)
       return decoded.get()
     if session.inputEnded:
       return endOfInput()
@@ -182,7 +185,8 @@ proc readEvent*(session: TerminalSession; timeoutMs = -1): InputEvent =
 
     var waitMs: int
     if session.decoder.hasPendingEscape:
-      waitMs = session.options.escapeTimeoutMs
+      waitMs = max(0, session.options.escapeTimeoutMs -
+        elapsedMilliseconds(session.escapeLastByteAt.get()))
     elif session.options.monitorResize and
         session.detectedCapabilities.supportsResizeEvents:
       waitMs = session.options.resizePollMs
@@ -199,15 +203,22 @@ proc readEvent*(session: TerminalSession; timeoutMs = -1): InputEvent =
     case platformRead.kind
     of platformBytes:
       session.decoder.feed(platformRead.data)
+      if session.decoder.hasPendingEscape:
+        session.escapeLastByteAt = some(getMonoTime())
+      else:
+        session.escapeLastByteAt = none(MonoTime)
     of platformEvent:
       return platformRead.event
     of platformEndOfInput:
       session.inputEnded = true
       session.decoder.finish()
     of platformTimeout:
-      if session.decoder.hasPendingEscape:
+      if session.decoder.hasPendingEscape and
+          elapsedMilliseconds(session.escapeLastByteAt.get()) >=
+            session.options.escapeTimeoutMs:
         let escaped = session.decoder.nextEvent(flushEscape = true)
         if escaped.isSome:
+          session.escapeLastByteAt = none(MonoTime)
           return escaped.get()
       if timeoutMs >= 0 and elapsedMilliseconds(started) >= timeoutMs:
         return timeoutInput()
