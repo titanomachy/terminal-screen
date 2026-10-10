@@ -276,7 +276,7 @@ when defined(windows):
       session.close()
     console.checkRestoredState(baseline.inputMode, baseline.outputMode)
 
-  proc pipeEofScenario() =
+  proc pipeEofScenario(buffered = false) =
     # Private pipe and file: never modify the inherited console or streams.
     var reader, writer: Handle
     var attributes = SECURITY_ATTRIBUTES(nLength: int32(sizeof(SECURITY_ATTRIBUTES)))
@@ -301,13 +301,20 @@ when defined(windows):
     defer:
       output.cfile.close()
       removeFile(output.path)
-    let bytes = "é\e[A"
+    let bytes = if buffered: "header\né\e[Ax" else: "é\e[A"
     var written: int32
     checkApi(writeFile(writer, unsafeAddr bytes[0], int32(bytes.len),
       addr written, nil), "cannot write to the Windows pipe")
     checkValue(written == int32(bytes.len), "Windows pipe write was incomplete")
-    checkApi(closeHandle(writer), "cannot close the Windows pipe writer")
-    writer = 0
+    if buffered:
+      checkValue(input.readLine() == "header", "Windows pipe header was not read")
+      var available: int32
+      checkValue(peekNamedPipe(input.osHandle(), lpTotalBytesAvail = addr available),
+        "cannot check buffered Windows pipe input")
+      checkValue(available == 0, "the pipe still has bytes outside its File buffer")
+    else:
+      checkApi(closeHandle(writer), "cannot close the Windows pipe writer")
+      writer = 0
 
     var options = defaultSessionOptions()
     options.requireTerminal = false
@@ -321,6 +328,17 @@ when defined(windows):
     let arrow = session.readEvent(timeoutMs = 500)
     checkValue(arrow.kind == eventKey and arrow.keyEvent.key == keyArrowUp,
       "Windows piped navigation was not decoded")
+    if buffered:
+      session.close()
+      checkValue(input.readChar() == 'x',
+        "the session consumed later buffered Windows pipe input")
+      checkApi(closeHandle(writer), "cannot close the Windows pipe writer")
+      writer = 0
+      let reopened = openSession(input, output.cfile, options)
+      defer: reopened.close()
+      checkValue(reopened.readEvent(timeoutMs = 500).kind == eventEndOfInput,
+        "a reopened buffered Windows pipe did not report EOF")
+      return
     checkValue(session.readEvent(timeoutMs = 500).kind == eventEndOfInput,
       "a closed Windows pipe did not report EOF")
     checkValue(session.readEvent(timeoutMs = 0).kind == eventEndOfInput,
@@ -343,6 +361,8 @@ when defined(windows):
     nativeInputScenario()
   of "pipe-eof":
     pipeEofScenario()
+  of "buffered-pipe":
+    pipeEofScenario(buffered = true)
   else:
     quit("unknown Windows console lifecycle scenario: " & paramStr(1),
       QuitFailure)

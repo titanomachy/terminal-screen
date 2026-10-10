@@ -281,6 +281,61 @@ suite "terminal detection and non-terminal sessions":
       defer: second.close()
       check second.readEvent(timeoutMs = 50).keyEvent.key == keyArrowUp
 
+  test "sessions drain existing File buffers and preserve later standard reads":
+    let inputTemp = createTempFile("terminal_screen_buffered_", ".txt")
+    let outputTemp = createTempFile("terminal_screen_output_", ".txt")
+    defer:
+      inputTemp.cfile.close()
+      outputTemp.cfile.close()
+      removeFile(inputTemp.path)
+      removeFile(outputTemp.path)
+    inputTemp.cfile.write("header\néx\e[A!")
+    inputTemp.cfile.flushFile()
+    inputTemp.cfile.setFilePos(0)
+    check inputTemp.cfile.readLine() == "header"
+
+    block:
+      let session = openSession(
+        inputTemp.cfile, outputTemp.cfile, nonTerminalOptions())
+      defer: session.close()
+      let event = session.readEvent(timeoutMs = 0)
+      check event.kind == eventKey and event.keyEvent.text == "é"
+    check inputTemp.cfile.readChar() == 'x'
+
+    block:
+      let session = openSession(
+        inputTemp.cfile, outputTemp.cfile, nonTerminalOptions())
+      defer: session.close()
+      let event = session.readEvent(timeoutMs = 0)
+      check event.kind == eventKey and event.keyEvent.key == keyArrowUp
+    check inputTemp.cfile.readChar() == '!'
+
+    block:
+      let session = openSession(
+        inputTemp.cfile, outputTemp.cfile, nonTerminalOptions())
+      defer: session.close()
+      check session.readEvent(timeoutMs = 0).kind == eventEndOfInput
+
+  test "sessions read File pushback before new descriptor bytes":
+    let inputTemp = createTempFile("terminal_screen_pushback_", ".txt")
+    let outputTemp = createTempFile("terminal_screen_output_", ".txt")
+    defer:
+      inputTemp.cfile.close()
+      outputTemp.cfile.close()
+      removeFile(inputTemp.path)
+      removeFile(outputTemp.path)
+    inputTemp.cfile.write("a")
+    inputTemp.cfile.flushFile()
+    inputTemp.cfile.setFilePos(0)
+    # endOfFile probes with getc/ungetc, leaving a byte in the stream buffer.
+    check not inputTemp.cfile.endOfFile()
+    let session = openSession(
+      inputTemp.cfile, outputTemp.cfile, nonTerminalOptions())
+    defer: session.close()
+    let event = session.readEvent(timeoutMs = 0)
+    check event.kind == eventKey and event.keyEvent.text == "a"
+    check session.readEvent(timeoutMs = 0).kind == eventEndOfInput
+
   test "nested sessions are rejected and ownership is released":
     let inputTemp = createTempFile("terminal_screen_input_", ".txt")
     let outputTemp = createTempFile("terminal_screen_output_", ".txt")
@@ -381,6 +436,31 @@ when defined(posix):
     execCmdEx(quoteShellCommand(@[helper, name]))
 
   suite "POSIX PTY integration":
+    test "buffered pipe input is available while its descriptor has no bytes":
+      var descriptors: array[2, cint]
+      check posix.pipe(descriptors) == 0
+      var input: File
+      check open(input, FileHandle(descriptors[0]), fmRead)
+      defer:
+        input.close()
+        discard posix.close(descriptors[1])
+      let output = createTempFile("terminal_screen_pipe_", ".txt")
+      defer:
+        output.cfile.close()
+        removeFile(output.path)
+      let bytes = "header\néx"
+      check posix.write(descriptors[1], unsafeAddr bytes[0], bytes.len) == bytes.len
+      check input.readLine() == "header"
+      var descriptor = TPollfd(fd: descriptors[0], events: POLLIN)
+      check posix.poll(addr descriptor, Tnfds(1), 0) == 0
+
+      block:
+        let session = openSession(input, output.cfile, nonTerminalOptions())
+        defer: session.close()
+        let event = session.readEvent(timeoutMs = 0)
+        check event.kind == eventKey and event.keyEvent.text == "é"
+      check input.readChar() == 'x'
+
     test "a session owns matching cursor visibility commands":
       var pty = openPty()
       defer: pty.close()
@@ -613,3 +693,6 @@ when defined(windows):
 
     test "closed Windows pipes report EOF after their remaining input":
       check runWindowsConsoleScenario("pipe-eof") == 0
+
+    test "Windows sessions drain File buffers before waiting on a pipe":
+      check runWindowsConsoleScenario("buffered-pipe") == 0

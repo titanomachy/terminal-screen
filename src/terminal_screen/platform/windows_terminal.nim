@@ -5,6 +5,7 @@ import windows/winlean
 
 import ../types
 import ./common
+import ./buffered_input
 
 const
   EnableProcessedInput = 0x0001'i32
@@ -59,6 +60,7 @@ type
     maximumWindowSize {.importc: "dwMaximumWindowSize".}: Coord
 
   PlatformState* = object
+    input: File
     inputHandle: Handle
     outputHandle: Handle
     originalInputMode: DWORD
@@ -103,6 +105,7 @@ proc tryTerminalSizePlatform*(file: File): Option[TerminalSize] =
   none(TerminalSize)
 
 proc startPlatform*(input, output: File; enableRaw, enableAnsi: bool): PlatformState =
+  result.input = input
   result.inputHandle = input.osHandle()
   result.outputHandle = output.osHandle()
   result.inputIsConsole = getConsoleMode(
@@ -231,6 +234,10 @@ proc readPlatform*(state: var PlatformState; timeoutMs: int): PlatformRead =
   if state.remainingRepeats > 0:
     dec state.remainingRepeats
     return eventRead(state.repeatedEvent)
+
+  let buffered = readBufferedInput(state.input)
+  if buffered.isSome:
+    return buffered.get()
 
   let waitTime = if timeoutMs < 0: INFINITE else: int32(timeoutMs)
   let waitResult = waitForSingleObject(state.inputHandle, waitTime)

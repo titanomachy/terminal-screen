@@ -4,9 +4,11 @@ import std/[options, os, posix, termios]
 
 import ../types
 import ./common
+import ./buffered_input
 
 type
   PlatformState* = object
+    input: File
     inputFd: cint
     originalMode: Termios
     rawEnabled: bool
@@ -28,6 +30,7 @@ proc startPlatform*(input, output: File; enableRaw, enableAnsi: bool): PlatformS
   ## Captures and optionally changes the terminal input mode.
   discard output
   discard enableAnsi
+  result.input = input
   result.inputFd = cint(input.getFileHandle())
   if not enableRaw:
     return
@@ -66,6 +69,9 @@ proc restorePlatform*(state: var PlatformState) =
 
 proc readPlatform*(state: var PlatformState; timeoutMs: int): PlatformRead =
   ## Waits for and reads one terminal byte.
+  let buffered = readBufferedInput(state.input)
+  if buffered.isSome:
+    return buffered.get()
   var descriptor = TPollfd(
     fd: state.inputFd,
     events: POLLIN,

@@ -153,7 +153,8 @@ proc readEvent*(session: TerminalSession; timeoutMs = -1): InputEvent =
   ##
   ## Byte-stream backends do not read ahead past the returned event. Closing a
   ## session therefore leaves later input on its borrowed `File` available to a
-  ## subsequent session or another consumer.
+  ## subsequent session or another consumer. Bytes buffered by earlier standard
+  ## File reads are drained before waiting for or reading OS input.
   ##
   ## `timeoutMs = -1` waits indefinitely. A non-negative timeout returns
   ## `eventTimeout` when no input or resize is available. A lone Escape is

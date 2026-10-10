@@ -25,6 +25,13 @@ a real terminal. Any code that changes raw mode, cursor visibility, or screen
 state must restore it on normal return, cancellation, end-of-input, and raised
 exceptions.
 
+Buffered input is probed in `src/terminal_screen/platform/buffered_input.nim`
+before either backend waits on OS input. Keep CRT buffer access isolated there:
+use system-header fields or CRT accessors, never hard-coded `FILE` offsets.
+Only drain bytes already buffered; new OS reads must still stop at one byte.
+Verify transitions between standard `File` reads and sessions using both files
+and private pipes, including a pipe whose writer remains open.
+
 New public APIs need documentation comments and tests. Changes to normalized
 input events or session lifecycle behavior also need a changelog entry because
 TerminalPrompt and future TerminalWidgets will depend on those contracts.

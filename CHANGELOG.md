@@ -12,6 +12,8 @@ This project follows Semantic Versioning.
   bytes, rather than raising `TerminalIOError`.
 - Preserve fragmented escape sequences across short or non-blocking reads;
   expire their Escape timer independently of each caller's read timeout.
+- Drain existing borrowed `File` buffers before OS input on Unix and Windows,
+  preserving queued text, navigation, and subsequent standard stream reads.
 
 ## [v0.1.1] - 2026-09-02
 

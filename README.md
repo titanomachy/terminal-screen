@@ -260,6 +260,8 @@ printf 'Hi\n' | nim r --path:src examples/redirected_input.nim
 - Only one session may own process-wide terminal state; nested opens raise
   `SessionActiveError`.
 - Sessions borrow their `File` streams; keep them open until cleanup finishes.
+- Sessions drain bytes already buffered by standard `File` reads before reading
+  OS input, so `readLine` or `endOfFile` can precede a session on the same stream.
 - `readEvent` consumes only the bytes needed for one event. Closing and reopening
   over the same input preserves later bytes.
 - Resize detection uses bounded geometry polling without allocation or terminal
