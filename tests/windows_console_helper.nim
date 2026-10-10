@@ -1,7 +1,7 @@
 ## Process-isolated Windows Console lifecycle scenarios used by the test suite.
 
 when defined(windows):
-  import std/os
+  import std/[os, tempfiles]
   import windows/winlean
 
   import terminal_screen
@@ -60,6 +60,12 @@ when defined(windows):
 
   proc getOsfhandle(fileDescriptor: cint): Handle {.
     importc: "_get_osfhandle", header: "<io.h>".}
+
+  proc openOsfhandle(handle: int; flags: cint): cint {.
+    importc: "_open_osfhandle", header: "<io.h>".}
+
+  proc closeDescriptor(descriptor: cint): cint {.
+    importc: "_close", header: "<io.h>".}
 
   proc osHandle(file: File): Handle =
     getOsfhandle(cint(file.getFileHandle()))
@@ -270,6 +276,59 @@ when defined(windows):
       session.close()
     console.checkRestoredState(baseline.inputMode, baseline.outputMode)
 
+  proc pipeEofScenario() =
+    # Private pipe and file: never modify the inherited console or streams.
+    var reader, writer: Handle
+    var attributes = SECURITY_ATTRIBUTES(nLength: int32(sizeof(SECURITY_ATTRIBUTES)))
+    checkApi(createPipe(reader, writer, attributes, 0),
+      "cannot create a Windows pipe")
+    defer:
+      if reader != 0:
+        discard closeHandle(reader)
+      if writer != 0:
+        discard closeHandle(writer)
+
+    let descriptor = openOsfhandle(int(reader), 0x8000) # _O_BINARY | _O_RDONLY
+    checkValue(descriptor >= 0, "cannot wrap the Windows pipe handle")
+    reader = 0 # The CRT descriptor owns this handle now.
+    var input: File
+    if not open(input, FileHandle(descriptor), fmRead):
+      discard closeDescriptor(descriptor)
+      fail("cannot wrap the Windows pipe descriptor")
+    defer: input.close()
+
+    let output = createTempFile("terminal_screen_pipe_", ".txt")
+    defer:
+      output.cfile.close()
+      removeFile(output.path)
+    let bytes = "é\e[A"
+    var written: int32
+    checkApi(writeFile(writer, unsafeAddr bytes[0], int32(bytes.len),
+      addr written, nil), "cannot write to the Windows pipe")
+    checkValue(written == int32(bytes.len), "Windows pipe write was incomplete")
+    checkApi(closeHandle(writer), "cannot close the Windows pipe writer")
+    writer = 0
+
+    var options = defaultSessionOptions()
+    options.requireTerminal = false
+    options.ansiMode = ansiNever
+    options.monitorResize = false
+    let session = openSession(input, output.cfile, options)
+    defer: session.close()
+    let text = session.readEvent(timeoutMs = 500)
+    checkValue(text.kind == eventKey and text.keyEvent.text == "é",
+      "Windows piped UTF-8 text was not decoded")
+    let arrow = session.readEvent(timeoutMs = 500)
+    checkValue(arrow.kind == eventKey and arrow.keyEvent.key == keyArrowUp,
+      "Windows piped navigation was not decoded")
+    checkValue(session.readEvent(timeoutMs = 500).kind == eventEndOfInput,
+      "a closed Windows pipe did not report EOF")
+    checkValue(session.readEvent(timeoutMs = 0).kind == eventEndOfInput,
+      "a subsequent read after Windows pipe EOF raised or timed out")
+    session.close()
+    checkValue(input.getFileHandle() == FileHandle(descriptor),
+      "the session closed its borrowed pipe")
+
   if paramCount() != 1:
     quit("expected one Windows console lifecycle scenario", QuitFailure)
 
@@ -282,6 +341,8 @@ when defined(windows):
     partialSetupScenario()
   of "native-input":
     nativeInputScenario()
+  of "pipe-eof":
+    pipeEofScenario()
   else:
     quit("unknown Windows console lifecycle scenario: " & paramStr(1),
       QuitFailure)

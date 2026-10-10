@@ -15,6 +15,7 @@ const
   EnableQuickEditMode = 0x0040'i32
   EnableProcessedOutput = 0x0001'i32
   EnableVirtualTerminalProcessing = 0x0004'i32
+  ErrorBrokenPipe = 109'i32
 
   KeyEventType = 0x0001'i16
   VkBack = 0x08'i16
@@ -264,6 +265,10 @@ proc readPlatform*(state: var PlatformState; timeoutMs: int): PlatformRead =
   var count: int32
   if readFile(state.inputHandle, addr buffer[0], int32(buffer.len),
       addr count, nil) == 0:
+    # Closing a pipe's writer is normal EOF, reported as a failed Win32 read.
+    let error = getLastError()
+    if error == ErrorBrokenPipe or error == ERROR_HANDLE_EOF:
+      return inputEnded()
     raise newException(TerminalIOError,
       errorText("cannot read redirected Windows input"))
   if count == 0:

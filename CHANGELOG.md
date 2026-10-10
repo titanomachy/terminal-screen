@@ -8,6 +8,8 @@ This project follows Semantic Versioning.
 
 - Fix default-stream `withTerminalSession` expansion for omitted options,
   differently named option variables, and option expressions.
+- Report normal Windows pipe closure as end-of-input after decoding queued
+  bytes, rather than raising `TerminalIOError`.
 
 ## [v0.1.1] - 2026-09-02
 

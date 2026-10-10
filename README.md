@@ -5,7 +5,7 @@ guarded raw-mode sessions, normalized input events, cursor control, capability
 detection, geometry, timeouts, and EOF handling. Importing the library does not
 change terminal state.
 
-TerminalScreen is the low-level terminal layer for TerminalPrompt and future
+TerminalScreen is the low-level terminal layer for [TerminalPrompt](https://github.com/titanomachy/terminal-prompt) and future
 interactive packages in the Nim Terminal Suite. Styling and cell-width-aware
 text belong in [TerminalStyle](https://github.com/titanomachy/terminal-style);
 layout, prompt policy, and widget state belong in higher-level packages.
@@ -21,18 +21,21 @@ all three platforms with Nim 2.0.x, 2.2.x, and stable.
 
 ## Contents
 
-- [Installation](#installation)
-- [Quick start](#quick-start)
-- [API overview](#api-overview)
-  - [Reading keys safely](#reading-keys-safely)
-  - [Detection and geometry](#detection-and-geometry)
-  - [Cursor control](#cursor-control)
-  - [Incremental decoding](#incremental-decoding)
-  - [Redirected input and EOF](#redirected-input-and-eof)
-- [Session and cleanup guarantees](#session-and-cleanup-guarantees)
-- [Examples](#examples)
-- [Development and documentation](#development-and-documentation)
-- [License](#license)
+- [TerminalScreen](#terminalscreen)
+  - [Requirements](#requirements)
+  - [Contents](#contents)
+  - [Installation](#installation)
+  - [Quick start](#quick-start)
+  - [API overview](#api-overview)
+    - [Reading keys safely](#reading-keys-safely)
+    - [Detection and geometry](#detection-and-geometry)
+    - [Cursor control](#cursor-control)
+    - [Incremental decoding](#incremental-decoding)
+    - [Redirected input and EOF](#redirected-input-and-eof)
+  - [Session and cleanup guarantees](#session-and-cleanup-guarantees)
+  - [Examples](#examples)
+  - [Development and documentation](#development-and-documentation)
+  - [License](#license)
 
 ## Installation
 
@@ -217,7 +220,8 @@ nim r --path:src examples/decode_input.nim --demo
 
 Strict sessions require terminal streams by default. Set `requireTerminal =
 false` for files or pipes; raw mode, cursor hiding, and resize monitoring degrade
-according to capabilities.
+according to capabilities. Closing a pipe's writer produces `eventEndOfInput`
+after queued bytes are decoded, including on Windows.
 
 ```nim
 import terminal_screen

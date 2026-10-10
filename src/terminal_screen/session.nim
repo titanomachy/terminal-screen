@@ -45,6 +45,7 @@ proc openSession*(input: File = stdin; output: File = stdout;
   ## Only one session may be active in a process. When `requireTerminal` is
   ## false, redirected streams are accepted and unsupported raw/resize/cursor
   ## features degrade safely.
+  ## A pipe whose writer closes reports end-of-input after its remaining bytes.
   options.validate()
   if activeSession.testAndSet(moAcquire):
     raise newException(SessionActiveError,

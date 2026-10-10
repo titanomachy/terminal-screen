@@ -571,3 +571,6 @@ when defined(windows):
 
     test "native input preserves AltGr text and key repeat counts":
       check runWindowsConsoleScenario("native-input") == 0
+
+    test "closed Windows pipes report EOF after their remaining input":
+      check runWindowsConsoleScenario("pipe-eof") == 0
