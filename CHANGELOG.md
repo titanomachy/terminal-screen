@@ -2,7 +2,12 @@
 
 This project follows Semantic Versioning.
 
-## Unreleased
+## [v0.1.2] - 2026-10-10
+
+### Added
+
+- Add README contents, a quick start, and an API overview with screenshots,
+  animated terminal demos, and scripts to regenerate the recordings.
 
 ### Fixed
 
@@ -14,6 +19,7 @@ This project follows Semantic Versioning.
   expire their Escape timer independently of each caller's read timeout.
 - Drain existing borrowed `File` buffers before OS input on Unix and Windows,
   preserving queued text, navigation, and subsequent standard stream reads.
+- Make PTY output tests tolerate partial reads to avoid intermittent CI failures.
 
 ## [v0.1.1] - 2026-09-02
 

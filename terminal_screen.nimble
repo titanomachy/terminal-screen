@@ -1,6 +1,6 @@
 # Package
 
-version       = "0.1.1"
+version       = "0.1.2"
 author        = "titanomachy"
 description   = "Pure-Nim terminal sessions, input events, cursor control, and geometry detection"
 license       = "MIT"
