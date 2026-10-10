@@ -305,7 +305,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution requirements. To rebuild
 the README media on Linux or macOS:
 
 ```sh
-python3 scripts/regenerate_media.py
+nim r scripts/regenerate_media.nim
 ```
 
 Recording tools, geometry, font, and rendering details are documented in

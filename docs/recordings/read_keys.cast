@@ -1,4 +1,4 @@
-{"version": 3, "term": {"cols": 64, "rows": 12}, "command": "python3 scripts/record_demo.py keys build/read_keys", "title": "Reading keys safely", "env": {"TERM": "xterm-256color"}}
+{"version":3,"term":{"cols":64,"rows":12},"command":"build/record_demo keys build/read_keys","title":"Reading keys safely","env":{"TERM":"xterm-256color"}}
 [0.059, "o", "\u001b[?25l"]
 [0.001, "o", "\u001b[?25lPress keys; Escape or Ctrl+C exits.\r\r\r\n"]
 [0.502, "o", "keyText: a\r\r\r\n"]

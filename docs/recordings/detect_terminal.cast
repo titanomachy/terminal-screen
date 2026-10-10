@@ -1,4 +1,4 @@
-{"version": 3, "term": {"cols": 64, "rows": 12}, "command": "python3 scripts/record_demo.py detect build/detect_terminal", "title": "Terminal detection and geometry", "env": {"TERM": "xterm-256color"}}
+{"version":3,"term":{"cols":64,"rows":12},"command":"build/record_demo detect build/detect_terminal","title":"Terminal detection and geometry","env":{"TERM":"xterm-256color"}}
 [0.056, "o", "\u001b[?25l"]
 [0.001, "o", "Terminal capabilities\r\n  Input terminal:  true\r\n  Output terminal: true\r\n  ANSI output:     true\r\n  Raw input:       true\r\n  Resize events:   true\r\nViewport: 64 columns x 12 rows\r\n"]
 [0.001, "o", "\u001b[?25l"]

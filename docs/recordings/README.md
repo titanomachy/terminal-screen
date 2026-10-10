@@ -13,26 +13,31 @@ to its example and source asciicast; no compiler output is recorded.
 
 ## Regenerate
 
-On Linux or macOS, install Nim, Python 3, Asciinema, Agg, ImageMagick 7 (`magick`),
+On Linux or macOS, install Nim, Asciinema 3, Agg, ImageMagick 7 (`magick`),
 and the `JetBrainsMono Nerd Font Mono` font. From the repository root:
 
 ```sh
 fc-match 'JetBrainsMono Nerd Font Mono'
-python3 scripts/regenerate_media.py
+nim r scripts/regenerate_media.nim
 ```
 
 The script replaces the five recordings and five images above. It compiles each
-example before capture, puts disposable binaries and intermediate GIFs in a
-temporary directory, and leaves Nim caches under `build/`. Use `--font 'Family
-Name'` to select another installed monospace family explicitly.
+example and the Nim capture driver before capture, and puts binaries,
+intermediate GIFs, and Nim caches under `build/`. Use
+`nim r scripts/regenerate_media.nim --font 'Family Name'` to select another
+installed monospace family explicitly. Both scripts use only Nim's standard
+library and OS APIs; Python is not required.
 
-`record_demo.py` provides finite capture commands. The key demo runs in a private
+`record_demo.nim` provides finite capture commands. Compile it with
+`nim c scripts/record_demo.nim`, then run `build/record_demo MODE build/EXAMPLE`
+(see `build/record_demo --help`). The key demo runs in a private
 PTY: it waits for the raw-mode prompt, sends `a`, `é`, Up, Ctrl+Left, Enter,
 resizes to 60×12, then sends Ctrl+C. Cursor updates run at 180 ms per step;
 decoder fragments arrive at 700 ms intervals. Redirected input supplies `Hi`
 and a newline through a pipe. These captures do not alter the developer's
 terminal. The wrapper hides the recording cursor outside the application and
-restores it when capture finishes; the final restoration is trimmed from media.
+restores it when capture finishes, fails, times out, or is interrupted with
+Ctrl+C; the final restoration is trimmed from media.
 
 ## Rendering and validation
 
